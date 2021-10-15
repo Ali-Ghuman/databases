@@ -22,6 +22,23 @@ create table boats(
 	length int
 );
 
+create table transactions(
+    tid int PRIMARY KEY, 
+    sid int, 
+    bid int, 
+    eid int, 
+    cost int, 
+    date date
+); 
+
+create table employees(
+    eid int PRIMARY KEY, 
+    tid int, 
+    ename VARCHAR(30), 
+    eaddress VARCHAR(30)
+); 
+
+
 insert into sailors values (22,'dusting',7,45);
 insert into sailors values (29,'brutus',1,33);
 insert into sailors values (31,'lubber',8,55);
@@ -86,3 +103,11 @@ insert into boats values (109,'Driftwood','blue', 35);
 insert into boats values (110,'Klapser','red', 30);
 insert into boats values (111,'Sooney','green', 28);
 insert into boats values (112,'Sooney','red', 28);
+
+
+insert into transactions values (1, 22, 101, 1, 100,'1998/10/10');
+insert into transactions values (2, 64, 101, 2, 100,'1998/9/5'); 
+insert into transactions values (3, 31, 103, 1, 230,'1998/11/6');
+
+insert into employees values (1, 1, "Eugene", "10th Housing Colony");
+insert into employees values (2, 2, "Carl", "73 Jail Road"); 

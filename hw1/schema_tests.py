@@ -46,19 +46,49 @@ class Reservation(Base):
     def __repr__(self):
         return "<Reservation(sid=%s, bid=%s, day=%s)>" % (self.sid, self.bid, self.day)
 
+class Transaction(Base):
+    __tablename__ = 'transactions'
+
+    tid = Column(Integer, primary_key=True)
+    sid = Column(Integer, ForeignKey('sailors.sid'))
+    bid = Column(Integer, ForeignKey('boats.bid'))
+    eid = Column(Integer, ForeignKey('employees.eid'))
+    cost = Column(Integer)
+    date = Column(DateTime)
+
+    sailor = relationship('Sailor')
+    boat = relationship('Boat')
+    employee = relationship('Employee')
+
+    def __repr__(self):
+        return "<Profit(tid=%s, cost=%s, date=%s)>" % (self.tid, self.cost, self.date)
+
+class Employee(Base):
+    __tablename__ = 'employees'
+
+    tid = Column(Integer, ForeignKey('transaction.tid'))
+    eid = Column(Integer, primary_key=True)
+    ename = Column(String)
+    eaddress = Column('String')
+    
+    def __repr__(self):
+        return "<Profit(eid=%s, name=%s, address=%s)>" % (self.eid, self.ename, self.eaddress)
+
+
 engine = create_engine( "mysql+pymysql://ari:@localhost/sailors?host=localhost")
 Base.metadata.create_all(bind=engine)
 
 Session = sessionmaker(bind = engine)
 
-session = Session()
+session = Session() #Part 2
 def test_1(): 
 	q = session.query(func.count(Boat.bid), Boat.bid, Boat.bname).join(Reservation).group_by(Boat.bid).all()
 	q2 = engine.execute("select count(b.bid), b.bid, b.bname from boats as b, reserves as r where r.bid = b.bid group by bid").fetchall() 
 	assert q == q2
 
 def test_2():
-	sub1 = session.query(Reservation.sid, func.count(Boat.bid.distinct()).label('r_boats')).join(Reservation).filter(Boat.color == 'red').group_by(Reservation.sid).subquery()
+	sub1 = session.query(Reservation.sid, func.count(Boat.bid.distinct()).label('r_boats')).join(Reservation)\
+		.filter(Boat.color == 'red').group_by(Reservation.sid).subquery()
 	sub2 = session.query(func.count(Boat.color)).filter(Boat.color == "red").scalar_subquery()
 	q = session.query(Sailor.sname, Sailor.sid).join(sub1).filter(sub1.c.r_boats == sub2).all() 
 	real_q = engine.execute('select s.sname, s.sid from sailors as s, \
@@ -80,13 +110,15 @@ def test_4():
 	sub1 = session.query(Reservation.bid, func.count(Reservation.bid).label("count_tot")).group_by(Reservation.bid).subquery()
 	q = session.query(func.max(sub1.c.count_tot), sub1.c.bid).group_by(sub1.c.bid).order_by(desc(sub1.c.count_tot)).limit(1).all()
 	real_q = engine.execute('select max(r.count_tot), r.bid from \
-		(select s.bid, count(s.bid) as count_tot from reserves as s group by s.bid) as r group by r.bid order by r.count_tot desc limit 1').fetchall() 
+		(select s.bid, count(s.bid) as count_tot from reserves as s group by s.bid) as r \
+			group by r.bid order by r.count_tot desc limit 1').fetchall() 
 	assert q == real_q
 
 def test_5(): 
 	sub1 = session.query(Reservation.sid).join(Boat).filter(Boat.color == "red")
 	q = session.query(Sailor.sid, Sailor.sname).filter(Sailor.sid.not_in(sub1)).all()
-	real_q = engine.execute('select s.sid, s.sname from sailors as s where s.sid not in (select r.sid from reserves as r, boats as b where b.bid = r.bid and b.color = "red")').fetchall() 
+	real_q = engine.execute('select s.sid, s.sname from sailors as s where s.sid not in\
+		 (select r.sid from reserves as r, boats as b where b.bid = r.bid and b.color = "red")').fetchall() 
 	assert q == real_q
 
 def test_6(): 
@@ -98,13 +130,16 @@ def test_7():
 	sub1 = session.query(Sailor.rating, func.min(Sailor.age).label("minAge")).group_by(Sailor.rating).subquery()
 	q = session.query(Sailor.sname, Sailor.sid).filter(and_(Sailor.age == sub1.c.minAge, Sailor.rating == sub1.c.rating)).all()
 	real_q = engine.execute('select sailors.sname, sailors.sid from sailors,\
-		(select rating, min(age) as minAge from sailors as s group by rating) sail where sailors.rating = sail.rating and sailors.age = sail.minAge').fetchall() 
+		(select rating, min(age) as minAge from sailors as s group by rating) sail \
+			where sailors.rating = sail.rating and sailors.age = sail.minAge').fetchall() 
 	assert q == real_q
 
 def test_8(): 
-	sub1 = session.query(Reservation.sid, Reservation.bid, func.count(Reservation.bid).label('count')).group_by(Reservation.sid, Reservation.bid).subquery()
+	sub1 = session.query(Reservation.sid, Reservation.bid, func.count(Reservation.bid).label('count')).\
+		group_by(Reservation.sid, Reservation.bid).subquery()
 	sub2 = session.query(sub1.c.bid, func.max(sub1.c.count).label("max_c")).group_by(sub1.c.bid).subquery()
-	q = session.query(sub1.c.sid, Sailor.sname, sub1.c.bid, sub2.c.max_c).filter(and_(sub1.c.bid == sub2.c.bid, sub1.c.count == sub2.c.max_c, Sailor.sid == sub1.c.sid)).all()
+	q = session.query(sub1.c.sid, Sailor.sname, sub1.c.bid, sub2.c.max_c).filter(and_\
+		(sub1.c.bid == sub2.c.bid, sub1.c.count == sub2.c.max_c, Sailor.sid == sub1.c.sid)).all()
 	real_q = engine.execute('select res.sid, s.sname, res.bid, in_res.max_c from sailors s, \
 		(select bid, max(r_table.count) as max_c\
 			from (select sid, bid, count(*) as count\
@@ -112,7 +147,21 @@ def test_8():
 						(select sid, bid, count(*) as count from reserves group by sid, bid) as res\
 							where res.bid = in_res.bid and res.count = in_res.max_c and s.sid = res.sid').fetchall() 
 	assert q == real_q
-
 session.close()
 
+session = Session() #Part 3
 
+def test_pt2_1(): #Get all the number of transactions made by employee one
+    q = session.query(func.count(Transaction.eid)).filter(Transaction.eid == 1).all() 
+    assert q[0][0] == 2
+
+def test_pt2_2(): #Sort the employees by how much they made per transaction
+    q = session.query(Employee.ename).join(Transaction).order_by(Transaction.cost).all()
+    assert q[0][0] == "Eugene" and q[1][0] == "Carl" and q[2][0] == "Eugene" 
+
+def test_pt2_3(): #for each transaction, list the boat and sailor 
+    q = session.query(Transaction.tid, Boat.bname, Sailor.sname).join(Sailor).join(Boat).all()
+    actual = [(1, 'Interlake', 'dusting'), (2, 'Interlake', 'horatio'), (3, 'Clipper', 'lubber')]
+    assert all(actual[i] == tAction for i, tAction in enumerate(q))
+
+session.close()
